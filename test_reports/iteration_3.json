@@ -1,0 +1,37 @@
+{
+  "summary": "Phase 3 testing complete. Backend: 11/11 pytest cases pass (Grammar defaults+CRUD+auth-gating, AI Chat with history+sessions, SRS SM-2 progression+reset+due-filter). Frontend: Grammar page loads 20 default cards (HSK1 filter returns 6), grammar-add-btn correctly hidden for anonymous. Chat Tutor modal opens via nav-chat-btn, Claude Sonnet 4.5 reply arrives in ~5-8s, session_id persists in localStorage (cnxue_chat_session), follow-up uses same session and history. Multi-select toggle works: slot-card-1+slot-card-2 selection shows slot-checkbox-N badges, combined-study-start (count=2) navigates to /study?kind=word&ids=s1,s2. Study page displays '2개 슬롯 · 3개 항목' with slot name badges (TESTA/TESTB) and 4 modes. SRS mode (study-mode-srs) renders srs-review + srs-card, tap-to-flip works (nǐ hǎo shown), quality=5 rating advances next card (2/3 progress), state saved to cnxue_srs_v1 localStorage (167 chars).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Grammar page", "issues": ["grammar-search does not match against the 'level' field (only title/explain/formula/examples). So typing 'HSK1' in search returns 0 results. Users have the level-filter buttons for that, but this could confuse users typing the term. Consider including level in the search predicate."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase3.py",
+    "/app/test_reports/pytest/phase3_results.xml"
+  ],
+  "action_items": [
+    "(Optional/Low) Include 'level' in grammar search predicate so 'HSK1' query also filters cards.",
+    "(Docs) Review request mentioned mode-srs testid but actual implementation uses study-mode-srs on /study page (correct) and mode-srs only inside SlotEditor — keep both naming conventions consistent or document the difference."
+  ],
+  "critical_code_review_comments": [
+    "Backend /api/grammar correctly returns 20 defaults to anonymous and includes user-scoped custom for authenticated. Auth-gating on POST/DELETE returns 401 as expected.",
+    "AI Chat builds history from prior turns into the system prompt (LlmChat doesn't accept role history natively). Trims to last 12 turns - prevents prompt bloat. Anonymous chats stored under user_id='anon' which means anonymous users share a single 'anon' bucket on the server side - this is intentional per spec but worth noting (cross-anon leakage if same session_id were reused; mitigated by random sid generation client-side).",
+    "SRS SM-2 implementation correct: quality<3 resets reps=0,interval=1; ef floored at 1.3; interval grows 1→3→round(prev*ef). due_at filtering with ISO string comparison works because ISO-8601 sorts lexicographically.",
+    "Frontend SRS uses localStorage key 'cnxue_srs_v1' for anonymous - working. Card flip + 4-quality rating + auto-advance verified.",
+    "Multi-select on Dashboard correctly disables non-data slots (selection count reflects only slots with items - verified via combined-study-start text '학습 시작 (2)' after selecting both populated slots).",
+    "/study?ids=...&kind=... reads ids from URL search params, hydrates slots from store, aggregates items - tested with 2+1=3 items correctly shown."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase3.py (created)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "TEST_user_* + TEST_session_* injected to Mongo per /app/auth_testing.md, auto-cleaned via pytest fixture teardown.",
+  "seed_data_creation": "Anonymous slots seeded via localStorage key 'cnxue_local_v1' with 2 word slots (TestA: 2 items, TestB: 1 item) for multi-select / combined study testing. cnxue_chat_session and cnxue_srs_v1 verified during chat & SRS flows.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 3 tests at /app/backend/tests/test_phase3.py (11 cases). Frontend testid map: nav-grammar-btn, nav-chat-btn in header; grammar-grid + grammar-card-{id} + grammar-search + grammar-level-{LVL} + grammar-add-btn (auth only); chat-tutor-modal + chat-input + chat-send + chat-new-session + chat-msg-{role}-{idx}; multi-select-toggle + multi-select-cancel + slot-checkbox-{N} + combined-study-start on Dashboard; study-mode-bar + study-mode-{quiz|flash|game|srs} + back-to-dashboard on /study; srs-review + srs-card + srs-rate-{0,2,4,5} (rate buttons appear ONLY after card flip). Anonymous localStorage keys: cnxue_local_v1 (slots), cnxue_chat_session (chat sid), cnxue_srs_v1 (SRS state), cnxue_progress_v1 (progress). Claude calls 5-10s, allow up to 45s for chat. Two 401 console errors during anonymous flow are expected (initial /api/auth/me probe).",
+  "rca of the issue": "N/A - no critical issues. Only minor: grammar search does not include 'level' field; not a bug per spec but a UX consideration."
+}

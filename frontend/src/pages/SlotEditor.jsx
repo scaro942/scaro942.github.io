@@ -7,6 +7,7 @@ import ItemInput from "@/components/ItemInput";
 import QuizMode from "@/components/QuizMode";
 import Flashcards from "@/components/Flashcards";
 import GamesMode from "@/components/GamesMode";
+import SRSReview from "@/components/SRSReview";
 import { useAuth } from "@/context/AuthContext";
 import { makeStore } from "@/lib/store";
 
@@ -148,6 +149,9 @@ export default function SlotEditor() {
       )}
       {active === "game" && (
         <GamesMode items={items} kind={kind} accent={accent} />
+      )}
+      {active === "srs" && (
+        <SRSReview items={items} kind={kind} accent={accent} />
       )}
     </Layout>
   );

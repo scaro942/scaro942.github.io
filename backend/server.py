@@ -541,6 +541,281 @@ async def ai_query(payload: AIQuery, request: Request):
     return {"result": result}
 
 
+# ===================== AI Chat Tutor (with history) =====================
+CHAT_SYSTEM = (
+    "당신은 한국인 학습자를 가르치는 친절하고 인내심 많은 중국어 선생님입니다. "
+    "학습자의 수준에 맞춰 한국어로 설명하되, 중국어 예문에는 반드시 병음(Pinyin)을 함께 제공하세요. "
+    "마크다운은 사용하지 말고 자연스러운 대화체로 답변하세요. "
+    "답변은 가능한 한 간결하게 (2-4 문단 이내), 학습자에게 다음 질문을 유도하도록 마무리하세요."
+)
+
+
+class ChatMessageIn(BaseModel):
+    message: str
+    session_id: Optional[str] = None  # null on first message
+
+
+@api_router.post("/ai/chat")
+async def ai_chat(payload: ChatMessageIn, request: Request):
+    user = await get_user_from_request(request)
+    user_id = user["user_id"] if user else "anon"
+    sid = payload.session_id or f"chat_{uuid.uuid4().hex[:12]}"
+
+    # Load history for this user+session
+    msgs = await db.chat_messages.find(
+        {"user_id": user_id, "session_id": sid}, {"_id": 0}
+    ).sort("created_at", 1).to_list(80)
+
+    # Build history into the system message (since LlmChat doesn't accept role history)
+    history_text = ""
+    if msgs:
+        history_text = "\n\n[이전 대화 요약]\n"
+        for m in msgs[-12:]:  # last 12 turns
+            role = "학생" if m["role"] == "user" else "선생님"
+            history_text += f"{role}: {m['content']}\n"
+
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=sid,
+        system_message=CHAT_SYSTEM + history_text,
+    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+    out = []
+    try:
+        async for ev in chat.stream_message(UserMessage(text=payload.message)):
+            if isinstance(ev, TextDelta):
+                out.append(ev.content)
+            elif isinstance(ev, StreamDone):
+                break
+    except Exception as e:
+        logger.exception("Chat failed")
+        raise HTTPException(status_code=502, detail=f"AI 호출 실패: {e}")
+    reply = "".join(out).strip()
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.chat_messages.insert_many([
+        {"user_id": user_id, "session_id": sid, "role": "user",
+         "content": payload.message, "created_at": now},
+        {"user_id": user_id, "session_id": sid, "role": "assistant",
+         "content": reply, "created_at": now},
+    ])
+    return {"session_id": sid, "reply": reply}
+
+
+@api_router.get("/ai/chat/{session_id}")
+async def chat_history(session_id: str, request: Request):
+    user = await get_user_from_request(request)
+    user_id = user["user_id"] if user else "anon"
+    msgs = await db.chat_messages.find(
+        {"user_id": user_id, "session_id": session_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(200)
+    return {"session_id": session_id, "messages": msgs}
+
+
+@api_router.get("/ai/chat-sessions")
+async def chat_sessions(request: Request):
+    user = await get_user_from_request(request)
+    user_id = user["user_id"] if user else "anon"
+    # Aggregate sessions by session_id
+    pipeline = [
+        {"$match": {"user_id": user_id}},
+        {"$sort": {"created_at": -1}},
+        {"$group": {
+            "_id": "$session_id",
+            "last_message": {"$first": "$content"},
+            "last_at": {"$first": "$created_at"},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"last_at": -1}},
+        {"$limit": 20},
+    ]
+    docs = await db.chat_messages.aggregate(pipeline).to_list(20)
+    return [
+        {"session_id": d["_id"], "preview": d["last_message"][:80],
+         "last_at": d["last_at"], "count": d["count"]}
+        for d in docs
+    ]
+
+
+# ===================== Grammar Cheat Sheet =====================
+DEFAULT_GRAMMAR = [
+    {"id": "g_be", "level": "HSK1", "title": "是 (~이다)",
+     "formula": "주어 + 是 + 명사", "explain": "A는 B이다. 가장 기본적인 'A=B' 문형.",
+     "examples": ["我是学生。 (wǒ shì xuéshēng) — 나는 학생이다."]},
+    {"id": "g_neg_bu", "level": "HSK1", "title": "不 (부정)",
+     "formula": "不 + 동사/형용사", "explain": "현재·미래 부정. 4성 앞에서는 2성으로 변조.",
+     "examples": ["我不喝咖啡。 (wǒ bù hē kāfēi) — 나는 커피를 마시지 않는다."]},
+    {"id": "g_neg_mei", "level": "HSK1", "title": "没/没有 (과거 부정)",
+     "formula": "没 + 동사", "explain": "과거 사실의 부정. '아직 ~하지 않았다'.",
+     "examples": ["我没吃饭。 (wǒ méi chī fàn) — 나는 밥을 안 먹었다."]},
+    {"id": "g_le", "level": "HSK2", "title": "了 (완료/변화)",
+     "formula": "동사 + 了", "explain": "완료 또는 새로운 상황.",
+     "examples": ["他来了。 (tā lái le) — 그가 왔다."]},
+    {"id": "g_ma", "level": "HSK1", "title": "吗 (의문)",
+     "formula": "평서문 + 吗?", "explain": "예/아니오 질문.",
+     "examples": ["你好吗? (nǐ hǎo ma) — 잘 지내?"]},
+    {"id": "g_de_attr", "level": "HSK1", "title": "的 (수식)",
+     "formula": "A + 的 + B", "explain": "A가 B를 수식. (소유/속성).",
+     "examples": ["我的书 (wǒ de shū) — 나의 책"]},
+    {"id": "g_zai", "level": "HSK2", "title": "在 (진행/장소)",
+     "formula": "在 + 장소 / 在 + 동사", "explain": "장소: ~에서. 진행: ~하는 중.",
+     "examples": ["我在家。 (wǒ zài jiā) — 나는 집에 있다.",
+                  "我在吃饭。 (wǒ zài chī fàn) — 나는 밥을 먹고 있다."]},
+    {"id": "g_neng", "level": "HSK2", "title": "能/可以 (가능)",
+     "formula": "能/可以 + 동사", "explain": "能: 능력·가능성. 可以: 허가.",
+     "examples": ["我能游泳。 (wǒ néng yóuyǒng) — 나는 수영할 수 있다."]},
+    {"id": "g_yao", "level": "HSK2", "title": "要 (의지/미래)",
+     "formula": "要 + 동사", "explain": "~하려고 한다 / ~할 것이다.",
+     "examples": ["我要去中国。 (wǒ yào qù Zhōngguó) — 나는 중국에 갈 거야."]},
+    {"id": "g_hen", "level": "HSK1", "title": "很 (정도)",
+     "formula": "很 + 형용사", "explain": "형용사 앞에 '매우'. 단독 형용사 술어와 함께 쓰임.",
+     "examples": ["天气很好。 (tiānqì hěn hǎo) — 날씨가 좋다."]},
+    {"id": "g_yi_xia", "level": "HSK2", "title": "一下 (가볍게 ~하다)",
+     "formula": "동사 + 一下", "explain": "잠깐 / 가볍게 한번.",
+     "examples": ["看一下。 (kàn yī xià) — 한번 봐."]},
+    {"id": "g_bi", "level": "HSK3", "title": "比 (비교)",
+     "formula": "A + 比 + B + 형용사", "explain": "A가 B보다 ~하다.",
+     "examples": ["他比我高。 (tā bǐ wǒ gāo) — 그가 나보다 크다."]},
+    {"id": "g_yinwei", "level": "HSK3", "title": "因为~所以 (인과)",
+     "formula": "因为 + 원인, 所以 + 결과", "explain": "~때문에, 그래서 ~하다.",
+     "examples": ["因为下雨,所以我没去。 (yīnwèi xiàyǔ, suǒyǐ wǒ méi qù) — 비가 와서 못 갔다."]},
+    {"id": "g_suiran", "level": "HSK3", "title": "虽然~但是 (역접)",
+     "formula": "虽然 A, 但是 B", "explain": "비록 A이지만 B이다.",
+     "examples": ["虽然累,但是开心。 (suīrán lèi, dànshì kāixīn) — 피곤하지만 즐겁다."]},
+    {"id": "g_ba", "level": "HSK3", "title": "把 (처치문)",
+     "formula": "주어 + 把 + 목적어 + 동사+기타성분", "explain": "특정 대상을 어떻게 처리했는지 강조.",
+     "examples": ["我把书放在桌子上。 (wǒ bǎ shū fàng zài zhuōzi shàng) — 나는 책을 책상 위에 놓았다."]},
+    {"id": "g_bei", "level": "HSK3", "title": "被 (피동)",
+     "formula": "주어 + 被 + 행위자 + 동사", "explain": "~에 의해 ~당하다.",
+     "examples": ["蛋糕被吃了。 (dàngāo bèi chī le) — 케이크가 (누군가에 의해) 먹혔다."]},
+    {"id": "g_jiu", "level": "HSK3", "title": "就 (즉시/바로)",
+     "formula": "주어 + 就 + 동사", "explain": "곧장 / 바로. 시간·조건의 즉시성 강조.",
+     "examples": ["我马上就来。 (wǒ mǎshàng jiù lái) — 곧 갈게."]},
+    {"id": "g_cai", "level": "HSK3", "title": "才 (비로소)",
+     "formula": "주어 + 才 + 동사", "explain": "예상보다 늦거나 어렵게 ~하다.",
+     "examples": ["他十点才来。 (tā shí diǎn cái lái) — 그는 10시에 와서야 왔다."]},
+    {"id": "g_guo", "level": "HSK2", "title": "过 (경험)",
+     "formula": "동사 + 过", "explain": "~해 본 적이 있다.",
+     "examples": ["我去过北京。 (wǒ qù guo Běijīng) — 나는 베이징에 가 본 적이 있다."]},
+    {"id": "g_zhe", "level": "HSK3", "title": "着 (상태 지속)",
+     "formula": "동사 + 着", "explain": "동작·상태가 지속되는 중.",
+     "examples": ["门开着。 (mén kāi zhe) — 문이 열려 있다."]},
+]
+
+
+class GrammarCard(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: f"gc_{uuid.uuid4().hex[:10]}")
+    user_id: Optional[str] = None  # None for defaults
+    level: Optional[str] = ""
+    title: str
+    formula: Optional[str] = ""
+    explain: Optional[str] = ""
+    examples: List[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class GrammarIn(BaseModel):
+    title: str
+    level: Optional[str] = ""
+    formula: Optional[str] = ""
+    explain: Optional[str] = ""
+    examples: List[str] = Field(default_factory=list)
+
+
+@api_router.get("/grammar")
+async def list_grammar(request: Request):
+    user = await get_user_from_request(request)
+    custom = []
+    if user:
+        custom = await db.grammar_cards.find(
+            {"user_id": user["user_id"]}, {"_id": 0}
+        ).sort("created_at", -1).to_list(500)
+    return {"defaults": DEFAULT_GRAMMAR, "custom": custom}
+
+
+@api_router.post("/grammar")
+async def create_grammar(payload: GrammarIn, request: Request):
+    user = await require_user(request)
+    card = GrammarCard(user_id=user["user_id"], **payload.model_dump())
+    await db.grammar_cards.insert_one(card.model_dump())
+    return card.model_dump()
+
+
+@api_router.delete("/grammar/{card_id}")
+async def delete_grammar(card_id: str, request: Request):
+    user = await require_user(request)
+    res = await db.grammar_cards.delete_one(
+        {"id": card_id, "user_id": user["user_id"]}
+    )
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="not found")
+    return {"ok": True}
+
+
+# ===================== SRS (SM-2 simplified) =====================
+class SRSReview(BaseModel):
+    kind: str  # word | sentence
+    label: str  # the chinese text
+    quality: int  # 0..5 (0=fail, 5=perfect)
+
+
+def srs_next(prev: Dict[str, Any], quality: int) -> Dict[str, Any]:
+    """Simplified SM-2. Returns updated SRS state for an item."""
+    ef = prev.get("ef", 2.5)
+    interval = prev.get("interval", 0)
+    reps = prev.get("reps", 0)
+
+    if quality < 3:
+        reps = 0
+        interval = 1
+    else:
+        if reps == 0:
+            interval = 1
+        elif reps == 1:
+            interval = 3
+        else:
+            interval = round(interval * ef)
+        reps += 1
+        ef = max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)))
+
+    due = (datetime.now(timezone.utc) + timedelta(days=interval)).isoformat()
+    return {"ef": round(ef, 2), "interval": interval, "reps": reps, "due_at": due}
+
+
+@api_router.post("/srs/review")
+async def srs_review(payload: SRSReview, request: Request):
+    user = await require_user(request)
+    key = f"{payload.kind}::{payload.label}"
+    existing = await db.srs_items.find_one(
+        {"user_id": user["user_id"], "key": key}, {"_id": 0}
+    ) or {}
+    nxt = srs_next(existing, payload.quality)
+    nxt.update({
+        "user_id": user["user_id"],
+        "key": key,
+        "kind": payload.kind,
+        "label": payload.label,
+        "last_review": datetime.now(timezone.utc).isoformat(),
+    })
+    await db.srs_items.update_one(
+        {"user_id": user["user_id"], "key": key},
+        {"$set": nxt}, upsert=True,
+    )
+    return nxt
+
+
+@api_router.get("/srs/due")
+async def srs_due(request: Request, kind: str = "word"):
+    user = await require_user(request)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    items = await db.srs_items.find(
+        {"user_id": user["user_id"], "kind": kind,
+         "due_at": {"$lte": now_iso}}, {"_id": 0}
+    ).sort("due_at", 1).to_list(500)
+    return {"due": items, "count": len(items)}
+
+
 app.include_router(api_router)
 
 app.add_middleware(

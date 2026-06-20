@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Toaster, toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Translate, ChatTeardropText, Lock, Coin, Database } from "@phosphor-icons/react";
+import { Translate, ChatTeardropText, Lock, Database, Stack, X } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
 import { makeStore } from "@/lib/store";
 import Layout from "@/components/Layout";
@@ -27,6 +27,8 @@ export default function Dashboard() {
   const [adIdx, setAdIdx] = useState(null);
   const [insuffInfo, setInsuffInfo] = useState(null);
   const [pendingImport, setPendingImport] = useState(null);
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [selected, setSelected] = useState(new Set());
 
   const isAuth = !!user;
   const store = useMemo(() => makeStore(isAuth), [isAuth]);
@@ -81,7 +83,28 @@ export default function Dashboard() {
       await reload();
     } catch (e) { toast.error("삭제 실패"); }
   };
-  const handleOpen = (slot) => navigate(`/slot/${slot.slot_id}?kind=${mode}`);
+  const handleOpen = (slot) => {
+    if (multiSelect) {
+      const next = new Set(selected);
+      if (next.has(slot.slot_id)) next.delete(slot.slot_id);
+      else next.add(slot.slot_id);
+      setSelected(next);
+      return;
+    }
+    navigate(`/slot/${slot.slot_id}?kind=${mode}`);
+  };
+
+  const startCombinedStudy = () => {
+    if (selected.size < 1) { toast.info("학습할 슬롯을 1개 이상 선택하세요."); return; }
+    const ids = Array.from(selected).join(",");
+    navigate(`/study?kind=${mode}&ids=${ids}`);
+  };
+
+  const clearSelection = () => { setSelected(new Set()); setMultiSelect(false); };
+
+  // Reset selection when switching mode
+  useEffect(() => { clearSelection(); }, [mode]);
+
   const handleExportOne = async (slot) => {
     const blob = new Blob([JSON.stringify({
       version: 1, kind: mode, exported_at: new Date().toISOString(),
@@ -144,13 +167,42 @@ export default function Dashboard() {
             슬롯 1~3은 무료, 4~10은 광고 시청으로 60일간 해제할 수 있어요.
           </p>
         </div>
-        <ExportImportBar
-          mode={mode}
-          store={store}
-          onImportResult={handleImportResult}
-          onAfterImport={reload}
-          toast={toast}
-        />
+        <div className="flex flex-wrap gap-2 items-center">
+          {!multiSelect ? (
+            <button
+              data-testid="multi-select-toggle"
+              onClick={() => setMultiSelect(true)}
+              className="btn-push px-3 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
+            >
+              <Stack size={14} weight="bold" /> 합쳐서 학습
+            </button>
+          ) : (
+            <>
+              <span className="text-xs font-bold text-slate-600">{selected.size}개 선택됨</span>
+              <button
+                data-testid="combined-study-start"
+                onClick={startCombinedStudy}
+                disabled={selected.size === 0}
+                className={`btn-push px-3 py-2 text-xs flex items-center gap-1.5 ${mode === "word" ? "btn-push-primary" : "btn-push-sentence"}`}
+              >
+                <Stack size={14} weight="bold" /> 학습 시작 ({selected.size})
+              </button>
+              <button
+                data-testid="multi-select-cancel"
+                onClick={clearSelection}
+                className="btn-push px-2.5 py-2 text-xs hover:bg-slate-50"
+                title="취소"
+              ><X size={14} weight="bold" /></button>
+            </>
+          )}
+          <ExportImportBar
+            mode={mode}
+            store={store}
+            onImportResult={handleImportResult}
+            onAfterImport={reload}
+            toast={toast}
+          />
+        </div>
       </div>
 
       {busy ? (
@@ -160,21 +212,34 @@ export default function Dashboard() {
           {Array.from({ length: MAX_SLOTS }, (_, i) => i + 1).map((idx) => {
             const isPremium = idx > 3;
             const isLocked = isPremium && !premiumActiveByIdx[idx];
+            const slot = slotsByIdx[idx];
+            const isSelected = slot && selected.has(slot.slot_id);
             return (
-              <SlotCard
-                key={idx}
-                index={idx}
-                mode={mode}
-                slot={slotsByIdx[idx]}
-                premiumExpiresAt={premiumActiveByIdx[idx]}
-                isLocked={isLocked}
-                onCreate={(i) => setCreateIdx(i)}
-                onOpen={handleOpen}
-                onRename={(s) => setRenameSlot(s)}
-                onDelete={handleDelete}
-                onExport={handleExportOne}
-                onUnlock={handleUnlockStart}
-              />
+              <div key={idx} className={`relative ${isSelected ? "ring-4 ring-blue-400 rounded-2xl" : ""}`}>
+                {multiSelect && slot && (
+                  <div
+                    data-testid={`slot-checkbox-${idx}`}
+                    className={`absolute -top-2 -left-2 z-10 w-7 h-7 rounded-full border-2 flex items-center justify-center font-bold text-xs ${
+                      isSelected ? "bg-blue-600 text-white border-blue-700" : "bg-white text-slate-400 border-slate-300"
+                    }`}
+                  >
+                    {isSelected ? "✓" : ""}
+                  </div>
+                )}
+                <SlotCard
+                  index={idx}
+                  mode={mode}
+                  slot={slot}
+                  premiumExpiresAt={premiumActiveByIdx[idx]}
+                  isLocked={isLocked}
+                  onCreate={(i) => setCreateIdx(i)}
+                  onOpen={handleOpen}
+                  onRename={(s) => setRenameSlot(s)}
+                  onDelete={handleDelete}
+                  onExport={handleExportOne}
+                  onUnlock={handleUnlockStart}
+                />
+              </div>
             );
           })}
         </div>

@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { SignOut, User, BookOpen, ChartLineUp } from "@phosphor-icons/react";
+import { SignOut, User, BookOpen, ChartLineUp, ChatCircleDots, GraduationCap } from "@phosphor-icons/react";
 import StatsDashboardModal from "@/components/StatsDashboardModal";
+import AIChatTutor from "@/components/AIChatTutor";
 
 export default function Layout({ children, mode = "word" }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [statsOpen, setStatsOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const accent = mode === "sentence" ? "text-purple-600" : "text-blue-600";
 
@@ -29,18 +31,34 @@ export default function Layout({ children, mode = "word" }) {
             </div>
           </button>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              data-testid="nav-grammar-btn"
+              onClick={() => navigate("/grammar")}
+              className="btn-push px-2.5 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
+              title="문법"
+            >
+              <GraduationCap size={14} weight="bold" /> <span className="hidden sm:inline">문법</span>
+            </button>
+            <button
+              data-testid="nav-chat-btn"
+              onClick={() => setChatOpen(true)}
+              className="btn-push px-2.5 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
+              title="AI 튜터"
+            >
+              <ChatCircleDots size={14} weight="bold" /> <span className="hidden sm:inline">튜터</span>
+            </button>
             <button
               data-testid="nav-stats-btn"
               onClick={() => setStatsOpen(true)}
-              className="btn-push px-3 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
+              className="btn-push px-2.5 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
               title="학습 통계"
             >
-              <ChartLineUp size={14} weight="bold" /> 통계
+              <ChartLineUp size={14} weight="bold" /> <span className="hidden sm:inline">통계</span>
             </button>
             {user ? (
               <>
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200">
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 ml-1">
                   {user.picture ? (
                     <img src={user.picture} alt="" className="w-6 h-6 rounded-full" />
                   ) : (
@@ -53,16 +71,17 @@ export default function Layout({ children, mode = "word" }) {
                 <button
                   onClick={async () => { await logout(); navigate("/login"); }}
                   data-testid="logout-btn"
-                  className="btn-push px-3 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
+                  className="btn-push px-2.5 py-2 text-xs flex items-center gap-1 hover:bg-slate-50"
+                  title="로그아웃"
                 >
-                  <SignOut size={16} weight="bold" /> 로그아웃
+                  <SignOut size={14} weight="bold" />
                 </button>
               </>
             ) : (
               <button
                 onClick={() => navigate("/login")}
                 data-testid="login-cta"
-                className="btn-push btn-push-primary px-4 py-2 text-sm"
+                className="btn-push btn-push-primary px-3 py-2 text-xs ml-1"
               >
                 로그인
               </button>
@@ -72,6 +91,7 @@ export default function Layout({ children, mode = "word" }) {
       </header>
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">{children}</main>
       <StatsDashboardModal open={statsOpen} onClose={() => setStatsOpen(false)} />
+      <AIChatTutor open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 }

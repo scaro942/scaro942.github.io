@@ -5,10 +5,11 @@ import Login from "@/pages/Login";
 import AuthCallback from "@/pages/AuthCallback";
 import Dashboard from "@/pages/Dashboard";
 import SlotEditor from "@/pages/SlotEditor";
+import Grammar from "@/pages/Grammar";
+import Study from "@/pages/Study";
 
 function AppRouter() {
   const location = useLocation();
-  // Detect session_id during render (not in useEffect) to avoid race conditions
   if (location.hash?.includes("session_id=")) {
     return <AuthCallback />;
   }
@@ -18,6 +19,8 @@ function AppRouter() {
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/slot/:slot_id" element={<SlotEditor />} />
+      <Route path="/grammar" element={<Grammar />} />
+      <Route path="/study" element={<Study />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
