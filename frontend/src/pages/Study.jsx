@@ -21,10 +21,11 @@ export default function Study() {
   const [params] = useSearchParams();
   const ids = (params.get("ids") || "").split(",").filter(Boolean);
   const kind = params.get("kind") || "word";
+  const isGlobalSrs = params.get("srs") === "all";
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [slots, setSlots] = useState([]);
-  const [active, setActive] = useState("quiz");
+  const [active, setActive] = useState(isGlobalSrs ? "srs" : "quiz");
   const [busy, setBusy] = useState(false);
 
   const store = useMemo(() => makeStore(!!user), [user]);
@@ -32,15 +33,21 @@ export default function Study() {
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const { slots: all } = await store.list(kind);
-      const selected = all.filter((s) => ids.includes(s.slot_id));
-      setSlots(selected);
+      if (isGlobalSrs) {
+        // Load BOTH word + sentence kinds for global review
+        const [w, s] = await Promise.all([store.list("word"), store.list("sentence")]);
+        setSlots([...(w.slots || []), ...(s.slots || [])]);
+      } else {
+        const { slots: all } = await store.list(kind);
+        const selected = all.filter((s) => ids.includes(s.slot_id));
+        setSlots(selected);
+      }
     } finally { setBusy(false); }
-  }, [store, kind, ids.join(",")]);
+  }, [store, kind, ids.join(","), isGlobalSrs]);
 
   useEffect(() => { load(); }, [load]);
 
-  const merged = useMemo(() => slots.flatMap((s) => s.items || []), [slots]);
+  const merged = useMemo(() => slots.flatMap((s) => (s.items || []).map((it) => ({ ...it, _kind: s.kind }))), [slots]);
   const accent = kind === "word" ? "text-blue-600" : "text-purple-600";
 
   if (loading || busy) {
@@ -71,18 +78,23 @@ export default function Study() {
 
       <header className="mb-6">
         <div className={`text-xs font-black uppercase tracking-widest ${accent} flex items-center gap-1`}>
-          <Stack size={14} weight="duotone" /> 합쳐서 학습
+          <Stack size={14} weight="duotone" /> {isGlobalSrs ? "전체 복습" : "합쳐서 학습"}
         </div>
         <h1 className="font-heading text-3xl sm:text-4xl font-black text-slate-900 mt-1">
-          {slots.length}개 슬롯 · {merged.length}개 항목
+          {isGlobalSrs ? "오늘의 복습 카드" : `${slots.length}개 슬롯 · ${merged.length}개 항목`}
         </h1>
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {slots.map((s) => (
-            <span key={s.slot_id} className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${accent} bg-blue-50 border border-blue-100 font-kr`}>
-              {s.name}
-            </span>
-          ))}
-        </div>
+        {isGlobalSrs && (
+          <p className="text-sm text-slate-500 mt-1">단어 + 문장 슬롯의 만료된 SRS 카드를 한 곳에서 복습하세요. ({merged.length}개 후보)</p>
+        )}
+        {!isGlobalSrs && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {slots.map((s) => (
+              <span key={s.slot_id} className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${accent} bg-blue-50 border border-blue-100 font-kr`}>
+                {s.name}
+              </span>
+            ))}
+          </div>
+        )}
       </header>
 
       <nav className="flex flex-wrap gap-2 mb-6" data-testid="study-mode-bar">
@@ -105,7 +117,11 @@ export default function Study() {
       {active === "quiz" && <QuizMode items={merged} kind={kind} accent={accent} />}
       {active === "flash" && <Flashcards items={merged} bookmarks={[]} kind={kind} accent={accent} />}
       {active === "game" && <GamesMode items={merged} kind={kind} accent={accent} />}
-      {active === "srs" && <SRSReview items={merged} kind={kind} accent={accent} />}
+      {active === "srs" && (
+        isGlobalSrs
+          ? <SRSReview items={merged} kind="word" accent={accent} globalMode />
+          : <SRSReview items={merged} kind={kind} accent={accent} />
+      )}
     </Layout>
   );
 }

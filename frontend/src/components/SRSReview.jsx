@@ -16,7 +16,7 @@ const QUALITY_LABELS = [
  * SRS review queue. Shows due items (those whose due_at <= now).
  * If no SRS records exist yet, surface all items so user can seed the queue.
  */
-export default function SRSReview({ items, kind, accent }) {
+export default function SRSReview({ items, kind, accent, globalMode = false }) {
   const { user } = useAuth();
   const [due, setDue] = useState([]);
   const [idx, setIdx] = useState(0);
@@ -29,38 +29,68 @@ export default function SRSReview({ items, kind, accent }) {
     setLoading(true);
     try {
       if (user) {
-        const { data } = await api.get(`/srs/due`, { params: { kind } });
-        const dueLabels = new Set((data.due || []).map((x) => x.label));
-        // Filter items that exist in our items list AND are due
-        let queue = items.filter((it) => dueLabels.has(it.chinese));
-        // If empty due queue but items exist, surface all items as initial seed
-        if (queue.length === 0 && items.length > 0) queue = items.slice(0, 20);
-        setDue(queue);
+        if (globalMode) {
+          // Load due for both kinds
+          const [w, s] = await Promise.all([
+            api.get(`/srs/due`, { params: { kind: "word" } }),
+            api.get(`/srs/due`, { params: { kind: "sentence" } }),
+          ]);
+          const dueLabels = {
+            word: new Set((w.data.due || []).map((x) => x.label)),
+            sentence: new Set((s.data.due || []).map((x) => x.label)),
+          };
+          let queue = items.filter((it) => {
+            const k = it._kind || "word";
+            return dueLabels[k]?.has(it.chinese);
+          });
+          if (queue.length === 0 && items.length > 0) queue = items.slice(0, 30);
+          setDue(queue);
+        } else {
+          const { data } = await api.get(`/srs/due`, { params: { kind } });
+          const dueLabels = new Set((data.due || []).map((x) => x.label));
+          let queue = items.filter((it) => dueLabels.has(it.chinese));
+          if (queue.length === 0 && items.length > 0) queue = items.slice(0, 20);
+          setDue(queue);
+        }
       } else {
-        const dueAll = localSrsDue(kind);
-        const dueLabels = new Set(dueAll.map((x) => x.label));
-        let queue = items.filter((it) => dueLabels.has(it.chinese));
-        if (queue.length === 0 && items.length > 0) queue = items.slice(0, 20);
-        setDue(queue);
+        if (globalMode) {
+          const dueLabels = {
+            word: new Set(localSrsDue("word").map((x) => x.label)),
+            sentence: new Set(localSrsDue("sentence").map((x) => x.label)),
+          };
+          let queue = items.filter((it) => {
+            const k = it._kind || "word";
+            return dueLabels[k]?.has(it.chinese);
+          });
+          if (queue.length === 0 && items.length > 0) queue = items.slice(0, 30);
+          setDue(queue);
+        } else {
+          const dueAll = localSrsDue(kind);
+          const dueLabels = new Set(dueAll.map((x) => x.label));
+          let queue = items.filter((it) => dueLabels.has(it.chinese));
+          if (queue.length === 0 && items.length > 0) queue = items.slice(0, 20);
+          setDue(queue);
+        }
       }
       setIdx(0); setFlipped(false);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { loadDue(); }, [items, kind, user]);
+  useEffect(() => { loadDue(); }, [items, kind, user, globalMode]);
 
   const current = due[idx];
 
   const rate = async (quality) => {
     if (!current || busy) return;
     setBusy(true);
+    const itemKind = current._kind || kind;
     try {
       if (user) {
-        await api.post("/srs/review", { kind, label: current.chinese, quality });
+        await api.post("/srs/review", { kind: itemKind, label: current.chinese, quality });
       } else {
-        localSrsReview({ kind, label: current.chinese, quality });
+        localSrsReview({ kind: itemKind, label: current.chinese, quality });
       }
-      record({ kind, label: current.chinese, correct: quality >= 3, mode: "srs" });
+      record({ kind: itemKind, label: current.chinese, correct: quality >= 3, mode: "srs" });
     } catch { /* noop */ }
     finally {
       setBusy(false);

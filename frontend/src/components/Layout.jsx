@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { SignOut, User, BookOpen, ChartLineUp, ChatCircleDots, GraduationCap } from "@phosphor-icons/react";
+import { SignOut, User, BookOpen, ChartLineUp, ChatCircleDots, GraduationCap, Bell, Brain } from "@phosphor-icons/react";
 import StatsDashboardModal from "@/components/StatsDashboardModal";
 import AIChatTutor from "@/components/AIChatTutor";
+import NotificationSettings, { useDailyReminder } from "@/components/NotificationSettings";
 
 export default function Layout({ children, mode = "word" }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [statsOpen, setStatsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  // Run daily reminder check in background
+  useDailyReminder();
 
   const accent = mode === "sentence" ? "text-purple-600" : "text-blue-600";
 
@@ -41,12 +46,28 @@ export default function Layout({ children, mode = "word" }) {
               <GraduationCap size={14} weight="bold" /> <span className="hidden sm:inline">문법</span>
             </button>
             <button
+              data-testid="nav-global-srs-btn"
+              onClick={() => navigate("/study?srs=all")}
+              className="btn-push px-2.5 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
+              title="전체 SRS 복습"
+            >
+              <Brain size={14} weight="bold" /> <span className="hidden sm:inline">복습</span>
+            </button>
+            <button
               data-testid="nav-chat-btn"
               onClick={() => setChatOpen(true)}
               className="btn-push px-2.5 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
               title="AI 튜터"
             >
               <ChatCircleDots size={14} weight="bold" /> <span className="hidden sm:inline">튜터</span>
+            </button>
+            <button
+              data-testid="nav-notif-btn"
+              onClick={() => setNotifOpen(true)}
+              className="btn-push px-2.5 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
+              title="알림 설정"
+            >
+              <Bell size={14} weight="bold" />
             </button>
             <button
               data-testid="nav-stats-btn"
@@ -92,6 +113,7 @@ export default function Layout({ children, mode = "word" }) {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">{children}</main>
       <StatsDashboardModal open={statsOpen} onClose={() => setStatsOpen(false)} />
       <AIChatTutor open={chatOpen} onClose={() => setChatOpen(false)} />
+      <NotificationSettings open={notifOpen} onClose={() => setNotifOpen(false)} />
     </div>
   );
 }

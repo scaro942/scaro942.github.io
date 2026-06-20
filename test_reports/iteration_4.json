@@ -1,0 +1,36 @@
+{
+  "summary": "Phase 4 frontend-only testing completed. Global SRS aggregator (/study?srs=all) and Daily Notification settings both work end-to-end. All 7 acceptance criteria verified via Playwright. No backend regressions tested (no backend changes in this phase). 0 page errors during tests; only expected 401s from anonymous /api/me ping.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_4.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/frontend/src/lib/localStore.js localCapacity() assumes s.unlocks exists - if a malformed localStorage value lacks the key (rare in real flows but reproducible by external scripts), it throws 'Cannot read properties of undefined (reading filter)'. Consider defensive default: (s.unlocks || []).filter(...). Caught during test setup with a partial seed payload but real users won't hit it because readStore() always returns the full default shape.",
+    "NotificationSettings sendTest only sets testing=true once and resets after 1500ms - if user double-clicks, second click is ignored (disabled). This is fine.",
+    "useDailyReminder polls every 5 min via setInterval - if user keeps tab open across day boundary while not studying, this works correctly because we recompute date each tick. Good.",
+    "Layout.jsx uses useDailyReminder() in every page that mounts Layout - this could fire duplicate intervals when navigating between pages. React StrictMode in dev would double-mount; in prod, navigation unmounts/remounts so cleanup runs. Acceptable."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (no changes per request)", "frontend": "100%"},
+  "test_credentials": "Anonymous mode only; no auth credentials required.",
+  "seed_data_creation": "Pre-seeded localStorage cnxue_local_v1 with 1 word slot (你好, 谢谢) + 1 sentence slot (我是学生。, 我爱你。) inside test scripts via page.evaluate. Cleared between tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 4 frontend-only acceptance verified. Notification.permission cannot be reliably set to 'granted' through page.context.grant_permissions alone in this Playwright build - use page.add_init_script to override window.Notification with a stub class that has permission='granted' BEFORE navigation. Example provided in this iteration's script. The denied/default UI paths are reachable via real browser permission. cnxue_srs_v1 keys are of form 'word::你好' / 'sentence::我是学生。' (kind-prefixed). Global SRS shows up to 30 candidate items as initial seed when no SRS state exists.",
+  "test_results_detail": {
+    "global_srs_nav": "PASS - nav-global-srs-btn -> /study?srs=all, header '전체 복습' + '오늘의 복습 카드' + '(4개 후보)', srs mode active by default, srs-review visible, '1 / 4' progress shown",
+    "card_progression": "PASS - srs-card flips to show pinyin + Korean; srs-rate-0/2/4/5 all visible; click rate-5 advances to '2 / 4'; cnxue_srs_v1 stored with key 'word::你好' (kind-tagged)",
+    "empty_state": "PASS - With no slots seeded, /study?srs=all shows '선택한 슬롯을 찾을 수 없어요' message + '대시보드로' button",
+    "notif_modal_open": "PASS - nav-notif-btn opens notif-settings-modal with DialogTitle '일일 학습 알림'",
+    "notif_toggle_granted": "PASS - With Notification.permission=granted, toggle is enabled; clicking saves {enabled:true,hour:20,minute:0} to cnxue_notif_pref; notif-hour and notif-minute appear",
+    "notif_test_button": "PASS - notif-test click triggers new Notification(...) and button text becomes '전송 완료!' for ~1.5s",
+    "notif_persistence": "PASS - Set hour=21, minute=15; reload; reopen modal -> values are still 21 and 15",
+    "regression_nav": "PASS - nav-grammar-btn, nav-chat-btn, nav-stats-btn, nav-home-btn all visible and grammar route navigates correctly"
+  }
+}
