@@ -65,26 +65,40 @@
 - **HanziWriter** loaded via CDN, wrapped in React component
 - **a11y fixes**: All Radix Dialogs now have DialogDescription (0 console warnings)
 
-## Backlog (Next Phases)
-### P0 (Next)
-- **Capacitor + AdMob integration** — convert web app to mobile app, replace mock ad with real AdMob Rewarded Video
-  - Steps: `yarn add @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios @capacitor-community/admob`
-  - Replace 5-sec countdown in `AdSimulationModal.jsx` with `AdMob.showRewardVideoAd()`
-  - Sign up at admob.google.com → get App ID + Ad Unit ID
-  - Build APK/IPA locally (Android Studio / Xcode)
+## What's Implemented (Phase 3 — 2026-02)
+- **Grammar Cheat Sheet** (`/grammar` page):
+  - 20 default HSK1-HSK3 grammar cards (是, 不, 没, 了, 吗, 的, 在, 能, 要, 很, 一下, 比, 因为~所以, 虽然~但是, 把, 被, 就, 才, 过, 着)
+  - Search across title/level/formula/explain/examples
+  - Level filter chips (HSK1~6, 기타)
+  - Custom card CRUD for authenticated users (title + level + formula + explain + multi-line examples)
+- **AI Chat Tutor** (modal from header `nav-chat-btn`):
+  - Claude Sonnet 4.5 with conversation history persisted to MongoDB
+  - Session ID stored in localStorage; survives page reload
+  - "새 대화" button to start fresh session
+  - 3 starter suggestions for empty chat
+  - Anonymous users share `user_id='anon'` bucket with client-side random session IDs
+- **Multi-Slot Combined Study** (`/study?kind=...&ids=...`):
+  - Dashboard `multi-select-toggle` enables selection mode
+  - Click multiple slot cards to add to combined queue (visible checkmark + blue ring)
+  - "학습 시작" launches Study page with merged items from all selected slots
+  - Study page exposes Quiz / Flashcards / Mini-games / SRS modes
+- **SRS (Spaced Repetition System)** with SM-2 simplified:
+  - Per-item ef (ease factor), interval, reps tracked
+  - Backend: `POST /api/srs/review`, `GET /api/srs/due` (auth)
+  - Anonymous: `localStorage cnxue_srs_v1`
+  - "복습" mode in SlotEditor and Study page
+  - 4-quality button (다시/어려움/좋음/쉬움) after card flip
+  - Interval progression: 1d → 3d → round(prev × ef)
+
+## Backlog
+### P0
+- Capacitor + AdMob mobile app conversion (when user is ready)
+- Real AdSense or Adsterra Rewarded for web monetization (replace 5-sec mock)
 
 ### P1
-- Grammar cheat sheet + custom grammar cards (HSK 1~6)
-- AI chat tutor with conversation history (currently one-shot)
-- Multi-slot merge mode for combined study sessions
-- Search/filter within slot items
+- Per-item drill from `/study` SRS queue across all slots (currently per-slot or per-selection)
 - Slot sharing via public link
-
-### P2
-- Replace mock ad with real AdSense (web-only fallback) or Adsterra Rewarded
-- iOS / Android push notifications (daily streak reminders)
-- Spaced repetition algorithm (SRS) for smart review queue
-- Audio recording for self-test pronunciation
+- Daily streak email/push reminders
 
 ## Tech Notes
 - All backend routes prefixed with `/api`

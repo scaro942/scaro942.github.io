@@ -39,6 +39,7 @@ export default function GrammarPage() {
         (x.title || "").toLowerCase().includes(s) ||
         (x.explain || "").toLowerCase().includes(s) ||
         (x.formula || "").toLowerCase().includes(s) ||
+        (x.level || "").toLowerCase().includes(s) ||
         (x.examples || []).some((e) => e.toLowerCase().includes(s))
       );
     }
