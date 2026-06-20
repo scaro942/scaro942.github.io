@@ -1,0 +1,103 @@
+{
+  "theme": "Light",
+  "archetype": "Archetype 6 (Vibrant Play) mixed with Archetype 3 (Soft/Tactile)",
+  "emotional_tone": "Playful, encouraging, structured, and modern.",
+  "typography": {
+    "fonts": {
+      "headings": "Outfit, sans-serif",
+      "body": "Nunito, sans-serif",
+      "korean": "Noto Sans KR, sans-serif",
+      "chinese": "Noto Sans SC, sans-serif"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-black tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-bold",
+      "h4": "text-lg sm:text-xl font-semibold",
+      "body": "text-base font-medium leading-relaxed",
+      "small_label": "text-xs font-bold uppercase tracking-[0.2em]"
+    },
+    "instructions": "Mix Chinese characters (Noto Sans SC) and Korean meanings (Noto Sans KR) seamlessly. Ensure Chinese characters are scaled slightly larger (e.g., text-5xl to text-7xl for flashcards) for stroke visibility, especially when using HanziWriter."
+  },
+  "colors": {
+    "background": {
+      "primary": "#FAFAFA",
+      "secondary": "#F1F5F9",
+      "card": "#FFFFFF"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "disabled": "#94A3B8"
+    },
+    "brand": {
+      "word_mode": "#2563EB",
+      "word_mode_hover": "#1D4ED8",
+      "word_mode_bg": "#DBEAFE",
+      "sentence_mode": "#7E22CE",
+      "sentence_mode_hover": "#6B21A8",
+      "sentence_mode_bg": "#F3E8FF",
+      "bookmark": "#F59E0B",
+      "correct": "#10B981",
+      "incorrect": "#EF4444",
+      "premium_lock": "#8B5CF6",
+      "premium_gold": "#F59E0B"
+    },
+    "surface": {
+      "border": "#E2E8F0",
+      "game_shadow": "0 4px 0 0 #CBD5E1",
+      "game_shadow_active": "0 0px 0 0 #CBD5E1"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "Tailwind standard with generous padding (p-6, p-8) for cards.",
+    "grid_strategy": "Control Room Grid for dashboard. Mobile-first single column, expanding to 3 or 4 columns on desktop.",
+    "card_style": "Playful Neo-brutalist / Push-button. border-2 border-slate-200 rounded-2xl shadow-[0_4px_0_rgb(226,232,240)]. Active state: translate-y-1 shadow-none.",
+    "alignment": "Left-align for reading text, Center-align for flashcards and quiz inputs.",
+    "slot_management": "Use grid layout for the 10 slots. 3 free slots distinctly styled. Slots 4-10 styled as locked with premium visual cues and 'Watch Ad' CTA."
+  },
+  "components": {
+    "buttons": "Rounded-xl, bold text, solid bottom shadow for a tactile 'pressable' feel. Primary uses brand color, secondary uses slate-100.",
+    "navigation": "Sticky top nav with crystal glassmorphism (backdrop-blur-xl bg-white/80 border-b border-slate-200). Avatar and streak prominently displayed.",
+    "modals": "Shadcn Dialog customized with rounded-2xl, centered content. High-impact warnings for 'Insufficient Slots'.",
+    "tabs": "Shadcn Tabs customized as segmented controls. Pill-shaped triggers, distinct colors for Word (Blue) vs Sentence (Purple) when active.",
+    "toast": "Sonner with rich colors (Green for correct/success, Red for incorrect/error).",
+    "progress_bar": "Thick rounded-full bars with animated width."
+  },
+  "motion_and_interaction": {
+    "hover": "Cards lift slightly (-translate-y-1) and increase shadow.",
+    "click": "Buttons press down (translate-y-1, shadow goes to 0).",
+    "transitions": "transition-all duration-200 ease-in-out.",
+    "gamification": "Micro-animations on correct answers (e.g., subtle scale bounce), countdown timer pulse for expiring slots."
+  },
+  "icons_and_media": {
+    "icon_library": "@phosphor-icons/react (Duotone style for gamified feel)",
+    "images": [
+      {
+        "category": "hero_abstract_bg",
+        "url": "https://images.pexels.com/photos/12732215/pexels-photo-12732215.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Vibrant abstract shapes for login or dashboard header background overlay."
+      },
+      {
+        "category": "premium_coins",
+        "url": "https://images.pexels.com/photos/12198523/pexels-photo-12198523.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "3D gold coins used as an illustrative element for unlocking premium slots or watching ads."
+      }
+    ]
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure APCA/WCAG AA compliance, particularly for white text on Word/Sentence brand colors.",
+    "testing_attributes": "All interactive elements MUST have data-testid attributes (e.g., data-testid='slot-unlock-btn', data-testid='quiz-option')."
+  },
+  "instructions_to_main_agent": [
+    "Migrate the single HTML logic to modular React components (.js files).",
+    "Implement Google Login and persist user profile (nickname, avatar, stats) in state/storage.",
+    "Build the dashboard emphasizing gamification: streaks, progress bars, and the Slot Management system.",
+    "Slot System Logic: Users have slots 1-3 unlocked by default. Slots 4-10 require 'watching an ad' (mocked via button click) to unlock for 60 days. Show countdowns on unlocked premium slots.",
+    "Import Logic: When importing data, verify if the required slots exceed currently available (unlocked) slots. If so, abort and show a warning modal.",
+    "Integrate HanziWriter for Hanzi stroke animations on the flashcard/writing quiz views.",
+    "Color Theme Enforcement: Enforce Blue (#2563EB) for Word Learning contexts, and Purple (#7E22CE) for Sentence Learning contexts.",
+    "Use @phosphor-icons/react for all iconography to match the gamified aesthetic.",
+    "Apply tactile 'push-button' CSS styles (border + bottom box-shadow) to major CTAs and quiz option cards."
+  ]
+}
