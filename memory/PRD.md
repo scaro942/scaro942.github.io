@@ -90,15 +90,25 @@
   - 4-quality button (다시/어려움/좋음/쉬움) after card flip
   - Interval progression: 1d → 3d → round(prev × ef)
 
-## Backlog
-### P0
-- Capacitor + AdMob mobile app conversion (when user is ready)
-- Real AdSense or Adsterra Rewarded for web monetization (replace 5-sec mock)
+## What's Implemented (Phase 4 — 2026-02)
+- **Global SRS Review** (`/study?srs=all`):
+  - Loads ALL slots across BOTH word + sentence kinds
+  - Merges items, filters to those whose SRS due_at <= now
+  - When no SRS state yet, surfaces up to 30 items as seed queue
+  - Header nav button (Brain icon) navigates directly
+  - SRS rating saves with correct per-item kind tag
+- **Daily Learning Notifications** (browser Notification API):
+  - Permission flow (default → granted/denied UI)
+  - Time picker (hour + 15-min interval)
+  - Test notification button
+  - Background `useDailyReminder` hook polls every 5 min
+  - Fires once per day if user hasn't studied yet and reached scheduled time
+  - Settings persisted to localStorage (`cnxue_notif_pref`, `cnxue_notif_last_fired`)
+- Defensive fix in `localStore.js` for missing `unlocks` array
 
-### P1
-- Per-item drill from `/study` SRS queue across all slots (currently per-slot or per-selection)
-- Slot sharing via public link
-- Daily streak email/push reminders
+## Ad Monetization Status
+- **User decision**: AdSense approval pending. Current 5-second mock unlock kept in place.
+- When ready: just sign up for AdSense → add `<script>` tag to `index.html` → place `<ins class="adsbygoogle">` slots in Dashboard/Layout sidebars. (AdSense is display-only, not rewarded — so the slot-unlock mock stays for unlock UX.)
 
 ## Tech Notes
 - All backend routes prefixed with `/api`

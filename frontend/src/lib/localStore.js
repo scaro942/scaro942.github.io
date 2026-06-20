@@ -20,7 +20,8 @@ function nowMs() { return Date.now(); }
 
 export function localCapacity() {
   const s = readStore();
-  const active = s.unlocks.filter((u) => u.expires_at > nowMs());
+  const unlocks = s.unlocks || [];
+  const active = unlocks.filter((u) => u.expires_at > nowMs());
   return {
     free_slots: FREE_SLOTS,
     max_slots: PREMIUM_SLOTS,
