@@ -10,7 +10,7 @@ export function useLocalState(key, initial) {
     }
   });
   useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* noop */ }
   }, [key, val]);
   return [val, setVal];
 }

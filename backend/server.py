@@ -9,7 +9,9 @@ import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
+
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -409,6 +411,134 @@ async def import_slots(payload: ImportPayload, request: Request):
 @api_router.get("/")
 async def root():
     return {"message": "Chinese Learning API"}
+
+
+# ===================== Progress Tracking =====================
+class ProgressRecord(BaseModel):
+    kind: str
+    label: str
+    correct: bool
+    mode: Optional[str] = None
+
+
+@api_router.post("/progress/record")
+async def record_progress(payload: ProgressRecord, request: Request):
+    user = await require_user(request)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    await db.progress_days.update_one(
+        {"user_id": user["user_id"], "date": today},
+        {"$inc": {"total": 1, "correct": 1 if payload.correct else 0}},
+        upsert=True,
+    )
+    item_key = f"{payload.kind}::{payload.label}"
+    await db.progress_items.update_one(
+        {"user_id": user["user_id"], "key": item_key},
+        {"$inc": {"total": 1, "correct": 1 if payload.correct else 0},
+         "$set": {"kind": payload.kind, "label": payload.label,
+                  "last_seen": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api_router.get("/progress")
+async def get_progress(request: Request):
+    user = await require_user(request)
+    days = await db.progress_days.find(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    ).sort("date", -1).to_list(60)
+    items = await db.progress_items.find(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    ).sort("total", -1).to_list(200)
+
+    today = datetime.now(timezone.utc).date()
+    day_set = {d["date"] for d in days if d.get("total", 0) > 0}
+    streak = 0
+    cur = today
+    while cur.strftime("%Y-%m-%d") in day_set:
+        streak += 1
+        cur = cur - timedelta(days=1)
+
+    total = sum(d.get("total", 0) for d in days)
+    correct = sum(d.get("correct", 0) for d in days)
+    accuracy = round(correct / total * 100) if total else 0
+    return {"days": days, "items": items, "streak": streak,
+            "total": total, "correct": correct, "accuracy": accuracy}
+
+
+# ===================== AI Assistant (Claude Sonnet 4.5) =====================
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
+
+AI_SYSTEM_PROMPT = (
+    "당신은 한국인 중국어 학습자를 돕는 친절한 중국어 선생님입니다. "
+    "답변은 항상 한국어로 명확하고 간결하게 해주세요. "
+    "중국어 예문에는 반드시 병음(Pinyin)과 한국어 번역을 함께 제공합니다. "
+    "마크다운은 사용하지 말고 줄바꿈으로 구분된 일반 텍스트로 답하세요."
+)
+
+
+class AIQuery(BaseModel):
+    type: str
+    chinese: Optional[str] = ""
+    pinyin: Optional[str] = ""
+    korean: Optional[str] = ""
+    kind: str = "word"
+
+
+async def call_claude(prompt: str) -> str:
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="LLM key not configured")
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"cnxue-{uuid.uuid4().hex[:8]}",
+        system_message=AI_SYSTEM_PROMPT,
+    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+    out = []
+    try:
+        async for ev in chat.stream_message(UserMessage(text=prompt)):
+            if isinstance(ev, TextDelta):
+                out.append(ev.content)
+            elif isinstance(ev, StreamDone):
+                break
+    except Exception as e:
+        logger.exception("LLM call failed")
+        raise HTTPException(status_code=502, detail=f"AI 호출 실패: {e}")
+    return "".join(out).strip()
+
+
+@api_router.post("/ai/query")
+async def ai_query(payload: AIQuery, request: Request):
+    _ = await get_user_from_request(request)
+    target = (payload.chinese or "").strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="chinese 텍스트가 필요합니다")
+
+    if payload.type == "example":
+        prompt = (
+            f"다음 중국어 {'단어' if payload.kind == 'word' else '문장'} "
+            f"'{target}'을(를) 사용한 자연스러운 예문 3개를 만들어주세요. "
+            "각 예문마다 다음 형식으로:\n\n"
+            "예문 1: [중국어]\n병음: [pinyin]\n한국어: [번역]\n\n"
+            "예문 사이는 빈 줄로 구분해주세요."
+        )
+    elif payload.type == "analyze":
+        prompt = (
+            f"중국어 {'단어' if payload.kind == 'word' else '문장'} '{target}'을(를) "
+            "분석해주세요. 다음을 포함해주세요:\n"
+            "1. 의미와 뉘앙스\n2. 문법 구조 (해당되는 경우)\n"
+            "3. 사용 시 주의사항\n4. 비슷한 표현이나 동의어 1-2개"
+        )
+    elif payload.type == "translate":
+        prompt = (
+            f"중국어 '{target}'을(를) 한국어로 자연스럽게 번역하고, "
+            "직역과 의역의 차이가 있다면 함께 설명해주세요. "
+            f"병음 '{payload.pinyin or '제공되지 않음'}'도 참고해주세요."
+        )
+    else:
+        raise HTTPException(status_code=400, detail="알 수 없는 type")
+
+    result = await call_claude(prompt)
+    return {"result": result}
 
 
 app.include_router(api_router)

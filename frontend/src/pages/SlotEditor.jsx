@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Toaster, toast } from "sonner";
-import { ArrowLeft, Question, Cards, BookmarkSimple, GameController, GearSix, Sparkle } from "@phosphor-icons/react";
+import { ArrowLeft, Question, Cards as CardsIcon, BookmarkSimple, GameController, GearSix } from "@phosphor-icons/react";
 import Layout from "@/components/Layout";
 import ItemInput from "@/components/ItemInput";
+import QuizMode from "@/components/QuizMode";
+import Flashcards from "@/components/Flashcards";
+import GamesMode from "@/components/GamesMode";
 import { useAuth } from "@/context/AuthContext";
 import { makeStore } from "@/lib/store";
 
 const MODES = [
-  { id: "input", label: "입력", icon: GearSix, ready: true },
-  { id: "quiz", label: "퀴즈", icon: Question, ready: false },
-  { id: "flash", label: "플래시카드", icon: Cards, ready: false },
-  { id: "bookmark", label: "북마크", icon: BookmarkSimple, ready: false },
-  { id: "game", label: "미니게임", icon: GameController, ready: false },
+  { id: "input", label: "입력", icon: GearSix },
+  { id: "quiz", label: "퀴즈", icon: Question },
+  { id: "flash", label: "플래시카드", icon: CardsIcon },
+  { id: "bookmark", label: "북마크", icon: BookmarkSimple },
+  { id: "game", label: "미니게임", icon: GameController },
 ];
 
 export default function SlotEditor() {
@@ -46,9 +49,14 @@ export default function SlotEditor() {
     setSlot(updated);
   };
 
+  const toggleBookmark = async (itemIndex) => {
+    const bms = slot.bookmarks || [];
+    const next = bms.includes(itemIndex) ? bms.filter((b) => b !== itemIndex) : [...bms, itemIndex];
+    await updateSlot({ bookmarks: next });
+  };
+
   const isWord = kind === "word";
   const accent = isWord ? "text-blue-600" : "text-purple-600";
-  const accentBg = isWord ? "bg-blue-600" : "bg-purple-600";
 
   if (loading || busy) {
     return (
@@ -67,6 +75,8 @@ export default function SlotEditor() {
       </Layout>
     );
   }
+
+  const items = slot.items || [];
 
   return (
     <Layout mode={kind}>
@@ -90,7 +100,7 @@ export default function SlotEditor() {
           {slot.name}
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          {isWord ? "단어" : "문장"} · {slot.items?.length || 0}개 항목
+          {isWord ? "단어" : "문장"} · {items.length}개 항목 · {slot.bookmarks?.length || 0} 북마크
         </p>
       </header>
 
@@ -101,12 +111,11 @@ export default function SlotEditor() {
           return (
             <button
               key={m.id}
-              onClick={() => m.ready ? setActive(m.id) : toast.info("이 기능은 곧 추가됩니다 🛠️")}
+              onClick={() => setActive(m.id)}
               data-testid={`mode-${m.id}`}
-              className={`btn-push px-3 py-2 text-xs flex items-center gap-1.5 ${isActive ? (isWord ? "btn-push-primary" : "btn-push-sentence") : "hover:bg-slate-50"} ${!m.ready ? "opacity-60" : ""}`}
+              className={`btn-push px-3 py-2 text-xs flex items-center gap-1.5 ${isActive ? (isWord ? "btn-push-primary" : "btn-push-sentence") : "hover:bg-slate-50"}`}
             >
               <Icon size={14} weight="bold" /> {m.label}
-              {!m.ready && <span className="ml-1 text-[9px] uppercase font-black">soon</span>}
             </button>
           );
         })}
@@ -115,13 +124,30 @@ export default function SlotEditor() {
       {active === "input" && (
         <ItemInput slot={slot} mode={kind} onUpdate={updateSlot} toast={toast} />
       )}
-
-      {active !== "input" && (
-        <div className="card-push p-8 text-center">
-          <Sparkle weight="duotone" size={48} className={`${accent} mx-auto mb-3`} />
-          <h3 className="font-heading text-xl font-bold text-slate-800 mb-1">곧 만나요!</h3>
-          <p className="text-sm text-slate-500">퀴즈/플래시카드/게임은 다음 단계에서 추가됩니다.</p>
-        </div>
+      {active === "quiz" && (
+        <QuizMode items={items} kind={kind} accent={accent} />
+      )}
+      {active === "flash" && (
+        <Flashcards
+          items={items}
+          bookmarks={slot.bookmarks || []}
+          onToggleBookmark={toggleBookmark}
+          kind={kind}
+          accent={accent}
+        />
+      )}
+      {active === "bookmark" && (
+        <Flashcards
+          items={items}
+          bookmarks={slot.bookmarks || []}
+          onToggleBookmark={toggleBookmark}
+          kind={kind}
+          accent={accent}
+          onlyBookmarked
+        />
+      )}
+      {active === "game" && (
+        <GamesMode items={items} kind={kind} accent={accent} />
       )}
     </Layout>
   );

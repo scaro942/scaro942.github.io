@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }) => {
   }, [refresh]);
 
   const logout = async () => {
-    try { await logoutApi(); } catch {}
+    try { await logoutApi(); } catch { /* noop */ }
     setUser(null);
   };
 

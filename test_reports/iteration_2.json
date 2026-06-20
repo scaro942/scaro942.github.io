@@ -1,0 +1,40 @@
+{
+  "summary": "Phase 2 testing complete. Backend: 11/11 new pytest cases pass for AI (translate/example/analyze + validation) and Progress (record/get/auth/accumulation). Frontend: full Phase 2 e2e validated via Playwright on REACT_APP_BACKEND_URL. Quiz (choice/assemble/hand), Flashcards (flip, order, bookmark, hanzi, ai, speak, nav), Bookmark mode, Mini-games (match, fill), Stats modal, AI Panel with Claude Sonnet 4.5 (translate returned 406 chars Korean translation). Radix Dialog a11y warnings resolved (0 warnings). Anonymous progress persisted to localStorage cnxue_progress_v1 (281 chars).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Stats modal items list", "issue": "After 1 quiz + 1 fill recording in anonymous mode, [data-testid='stats-items'] ul element was not present in DOM (only the empty-state '아직 학습 기록이 없어요' message was rendered). localStorage has 281 chars of progress data so recording works, but StatsDashboardModal may be conditionally rendering the ul only when items.length>0 - verify summary.items population from useProgressSummary in anonymous mode.", "affected_selectors": ["[data-testid='stats-items']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/phase2_results.xml"
+  ],
+  "action_items": [
+    "(Low priority) Investigate StatsDashboardModal: when anonymous user has items in localStorage progress, verify stats-items list renders correctly. Currently after 1 quiz+1 fill recording, only the empty-state message appears even though localStorage has 281 chars of progress data. May be a useProgressSummary parsing bug or conditional render mismatch."
+  ],
+  "critical_code_review_comments": [
+    "Backend /api/ai/query correctly streams Claude Sonnet 4.5 responses via emergentintegrations LlmChat with anthropic provider and model claude-sonnet-4-5-20250929. Validation for chinese-required and type-enum works (400 on invalid/empty/missing).",
+    "Backend /api/progress/record uses upsert with $inc for both progress_days (date-keyed) and progress_items (key=kind::label). Idempotent same-day accumulation verified.",
+    "Backend /api/progress aggregates streak via consecutive-day walk on day_set - correct logic, but note streak ignores days where total==0 even if document exists (good).",
+    "Frontend SlotCard active-card click handler is on the card div; child icon buttons use e.stopPropagation - good pattern.",
+    "AI panel calls take 3-10s; UI shows spinner state. Result rendered as whitespace-pre-wrap which preserves formatting from Claude.",
+    "Radix Dialog a11y warnings (DialogDescription / aria-describedby) reported in iteration_1 are now resolved - 0 warnings on NameSlotModal, InsufficientSlotsModal, StatsDashboardModal, AdSimulationModal flows."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase2.py (created)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "TEST_user_* + TEST_session_* injected to Mongo for auth-gated Progress tests; auto-cleanup via pytest fixture teardown. AI endpoint is open (no auth required per server.py).",
+  "seed_data_creation": "Anonymous slot 'Phase2Test' created via UI with 5 items (你好/再见/谢谢/对不起/没关系). Backend test users TEST_user_<uuid> created+cleaned per test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 2 tests live at /app/backend/tests/test_phase2.py (AI + Progress). Phase 1 tests at /app/backend/tests/backend_test.py still pass. Frontend testids for SlotCard: slot-create-{N} (create) vs slot-card-{N} (open active). NameSlotModal uses slot-name-input/slot-name-submit, ItemInput uses item-cn-input/item-pinyin-input/item-kr-input/item-add-btn. Anonymous localStorage progress key='cnxue_progress_v1'. AI calls to Claude Sonnet 4.5 take 5-10s, allow 30s wait. HanziWriter needs ~1.5-2s CDN init after switching to hand/hanzi mode. Two 401 console errors during anonymous flow are expected (initial /api/auth/me probe).",
+  "rca of the issue": "N/A - no critical issues. Only minor: stats-items rendering for anonymous mode may need verification, but data persistence (localStorage 281 chars after recordings) confirms recording flow is wired correctly."
+}

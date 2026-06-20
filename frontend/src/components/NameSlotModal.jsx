@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 export default function NameSlotModal({ open, onClose, defaultName = "", onSubmit, title = "슬롯 이름" }) {
   const [name, setName] = useState(defaultName);
@@ -16,6 +16,7 @@ export default function NameSlotModal({ open, onClose, defaultName = "", onSubmi
       <DialogContent className="max-w-sm rounded-2xl border-2" data-testid="name-slot-modal">
         <DialogHeader>
           <DialogTitle className="font-heading text-xl">{title}</DialogTitle>
+          <DialogDescription className="text-slate-500">슬롯에 사용할 이름을 입력해주세요.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <input

@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { SignOut, User, BookOpen } from "@phosphor-icons/react";
+import { SignOut, User, BookOpen, ChartLineUp } from "@phosphor-icons/react";
+import StatsDashboardModal from "@/components/StatsDashboardModal";
 
 export default function Layout({ children, mode = "word" }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const accent = mode === "sentence" ? "text-purple-600" : "text-blue-600";
 
@@ -26,7 +29,15 @@ export default function Layout({ children, mode = "word" }) {
             </div>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              data-testid="nav-stats-btn"
+              onClick={() => setStatsOpen(true)}
+              className="btn-push px-3 py-2 text-xs flex items-center gap-1.5 hover:bg-slate-50"
+              title="학습 통계"
+            >
+              <ChartLineUp size={14} weight="bold" /> 통계
+            </button>
             {user ? (
               <>
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200">
@@ -60,6 +71,7 @@ export default function Layout({ children, mode = "word" }) {
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">{children}</main>
+      <StatsDashboardModal open={statsOpen} onClose={() => setStatsOpen(false)} />
     </div>
   );
 }

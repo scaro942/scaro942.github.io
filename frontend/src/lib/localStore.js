@@ -9,7 +9,7 @@ function readStore() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return JSON.parse(raw);
-  } catch {}
+  } catch { /* noop */ }
   return { unlocks: [], slots: { word: [], sentence: [] } };
 }
 function writeStore(s) {
