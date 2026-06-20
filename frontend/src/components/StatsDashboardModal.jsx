@@ -4,7 +4,7 @@ import { Fire, ChartLineUp, Trophy, Target, X } from "@phosphor-icons/react";
 import { useProgressSummary } from "@/lib/useProgress";
 
 export default function StatsDashboardModal({ open, onClose }) {
-  const { data, loading } = useProgressSummary();
+  const { data, loading } = useProgressSummary(open);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose?.()}>

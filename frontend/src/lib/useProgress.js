@@ -60,7 +60,7 @@ export function useProgress() {
   return { record, isAuth };
 }
 
-export function useProgressSummary() {
+export function useProgressSummary(refreshKey) {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +79,7 @@ export function useProgressSummary() {
         setLoading(false);
       }
     })();
-  }, [user]);
+  }, [user, refreshKey]);
 
   return { data, loading };
 }
